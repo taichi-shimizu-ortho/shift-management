@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import { Assignment, MonthlyCounts, ShiftType, Profile } from '../types';
+import type { Assignment, MonthlyCounts, ShiftType, Profile } from '../types';
 
 // 月のシフト一覧を取得
 export async function fetchMonth(yearMonth: string) {

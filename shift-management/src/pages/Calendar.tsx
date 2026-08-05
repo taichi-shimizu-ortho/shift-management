@@ -4,7 +4,7 @@ import { ja } from 'date-fns/locale';
 import { useAuthStore } from '../store/authStore';
 import { fetchMonth, fetchShiftTypes, fetchDoctors, assignShift, deleteAssignment } from '../hooks/useShifts';
 import { ShiftBadge } from '../components/ShiftBadge';
-import { Assignment, ShiftType, Profile } from '../types';
+import type { Assignment, ShiftType, Profile } from '../types';
 import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 
 export function Calendar() {

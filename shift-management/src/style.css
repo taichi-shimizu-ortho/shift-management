@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   html {
@@ -11,7 +9,5 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  body {
-    @apply bg-gray-50;
-  }
+
 }

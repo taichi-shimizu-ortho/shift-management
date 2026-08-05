@@ -1,4 +1,4 @@
-import { Assignment } from '../types';
+import type { Assignment } from '../types';
 
 interface ShiftBadgeProps {
   assignment: Assignment & {
@@ -18,7 +18,7 @@ export function ShiftBadge({ assignment, isAdmin, onDelete }: ShiftBadgeProps) {
       style={{ backgroundColor: color }}
     >
       <span className="truncate">
-        {assignment.shift_types.name}: {assignment.profiles.full_name}
+        {assignment.profiles.full_name} ({assignment.shift_types.name}) {assignment.note ? `- ${assignment.note}` : ''}
       </span>
       {isAdmin && onDelete && (
         <button

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { fetchDoctors } from '../hooks/useShifts';
-import { Profile } from '../types';
+import type { Profile } from '../types';
 import { LogOut, Edit2, Save, X } from 'lucide-react';
 
 export function AdminDoctors() {

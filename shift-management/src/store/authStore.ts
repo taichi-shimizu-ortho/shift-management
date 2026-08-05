@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Profile } from '../types';
+import type { Profile } from '../types';
 import { supabase } from '../lib/supabaseClient';
 
 interface AuthState {
@@ -19,7 +19,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   setUser: (user) => {
     set({
       user,
-      isAdmin: user?.role === 'admin' ?? false,
+      isAdmin: user?.role === 'admin',
     });
   },
 

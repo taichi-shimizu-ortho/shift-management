@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useAuthStore } from '../store/authStore';
 import { fetchCounts } from '../hooks/useShifts';
-import { MonthlyCounts } from '../types';
+import type { MonthlyCounts } from '../types';
 import { ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 
 export function Summary() {
