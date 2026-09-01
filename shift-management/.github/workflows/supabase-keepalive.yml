@@ -20,7 +20,9 @@ jobs:
           status=$(curl -sS -o /tmp/response.json -w '%{http_code}' \
             "$SUPABASE_URL/rest/v1/assignments?select=id&limit=1" \
             -H "apikey: $SUPABASE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_KEY")
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36" \
+            -H "Accept: application/json")
 
           echo "HTTP $status"
           cat /tmp/response.json
