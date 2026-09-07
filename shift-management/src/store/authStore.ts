@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Profile } from '../types';
 import { supabase } from '../lib/supabaseClient';
+import { getFreshGoogleToken } from '../lib/googleAuth';
 
 interface AuthState {
   user: Profile | null;
@@ -62,12 +63,16 @@ export const useAuthStore = create<AuthState>((set) => ({
             isLoading: false,
           });
 
-          // Trigger calendar sync if provider token is present
-          if (session.provider_token) {
-            import('../services/googleCalendar').then((m) => {
-              m.syncGoogleCalendar(session.provider_token);
-            });
-          }
+          // 起動時の自動同期。トークン未登録なら静かに見送る。
+          void (async () => {
+            try {
+              const providerToken = await getFreshGoogleToken();
+              const m = await import('../services/googleCalendar');
+              await m.syncGoogleCalendar(providerToken);
+            } catch (err) {
+              console.error('Background calendar sync failed:', err);
+            }
+          })();
         } else {
           set({ isLoading: false });
         }

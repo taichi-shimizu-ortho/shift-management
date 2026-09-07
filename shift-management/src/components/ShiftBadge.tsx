@@ -1,8 +1,9 @@
 import type { Assignment } from '../types';
+import { cleanDisplayName } from '../lib/displayName';
 
 interface ShiftBadgeProps {
   assignment: Assignment & {
-    profiles: { full_name: string };
+    profiles: { full_name: string; display_name?: string | null };
     shift_types: { name: string; color: string };
   };
   isAdmin: boolean;
@@ -10,7 +11,17 @@ interface ShiftBadgeProps {
 }
 
 export function ShiftBadge({ assignment, isAdmin, onDelete }: ShiftBadgeProps) {
-  const color = assignment.shift_types.color;
+  // 埋め込み取得（profiles / shift_types）が欠けていても画面全体が落ちないようにする
+  const color = assignment.shift_types?.color ?? '#6b7280';
+  const shiftName = assignment.shift_types?.name ?? '種別不明';
+  // 表示名が設定されていればそれを使い、無ければ full_name を整形して使う
+  const profile = assignment.profiles;
+  const doctorName =
+    profile?.display_name?.trim() || cleanDisplayName(profile?.full_name ?? '担当不明');
+
+  // 括弧の中は行先名（note）を優先し、手動登録などで note が無いものは勤務種別を出す。
+  // 種別（当直／外勤）はバッジの色でも区別できる。
+  const label = assignment.note?.trim() || shiftName;
 
   return (
     <div
@@ -18,7 +29,7 @@ export function ShiftBadge({ assignment, isAdmin, onDelete }: ShiftBadgeProps) {
       style={{ backgroundColor: color }}
     >
       <span className="truncate">
-        {assignment.profiles.full_name} ({assignment.shift_types.name}) {assignment.note ? `- ${assignment.note}` : ''}
+        {doctorName}（{label}）
       </span>
       {isAdmin && onDelete && (
         <button

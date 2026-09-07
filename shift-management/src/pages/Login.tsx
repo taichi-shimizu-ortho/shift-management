@@ -154,7 +154,13 @@ export function Login() {
                 provider: 'google',
                 options: {
                   scopes: 'https://www.googleapis.com/auth/calendar.readonly',
-                  redirectTo: window.location.origin
+                  redirectTo: window.location.origin,
+                  // access_type=offline でないと Google はリフレッシュトークンを発行しない。
+                  // prompt=consent は、一度同意済みのアカウントでも確実に再発行させるため。
+                  queryParams: {
+                    access_type: 'offline',
+                    prompt: 'consent'
+                  }
                 }
               });
               if (error) setError(error.message);

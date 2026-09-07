@@ -15,6 +15,7 @@ export function Calendar() {
   const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
   const [doctors, setDoctors] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ date: string; doctorId?: string } | null>(null);
 
   const yearMonth = format(currentDate, 'yyyy-MM');
@@ -25,6 +26,7 @@ export function Calendar() {
 
   const loadData = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const [monthData, shiftsData, doctorsData] = await Promise.all([
         fetchMonth(yearMonth),
@@ -34,8 +36,10 @@ export function Calendar() {
       setAssignments(monthData);
       setShiftTypes(shiftsData);
       setDoctors(doctorsData);
-    } catch (error) {
+    } catch (error: any) {
+      // 黙って空のカレンダーを出すと原因が分からないので画面に出す
       console.error('Failed to load data:', error);
+      setLoadError(error?.message ?? String(error));
     } finally {
       setIsLoading(false);
     }
@@ -99,6 +103,19 @@ export function Calendar() {
             </div>
 
             {isLoading && <div className="text-center text-gray-500 py-4">読み込み中...</div>}
+
+            {loadError && (
+              <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm">
+                <p className="font-semibold mb-1">データの読み込みに失敗しました</p>
+                <p className="break-all">{loadError}</p>
+              </div>
+            )}
+
+            {!isLoading && !loadError && assignments.length === 0 && (
+              <div className="mb-4 p-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-sm">
+                この月に登録された予定はありません。
+              </div>
+            )}
 
             {!isLoading && (
               <div className="overflow-x-auto">

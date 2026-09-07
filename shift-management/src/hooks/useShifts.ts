@@ -13,15 +13,18 @@ export async function fetchMonth(yearMonth: string) {
 
   const { data, error } = await supabase
     .from('assignments')
+    // assignments から profiles への FK は doctor_id と created_by の2本あるため、
+    // ただの profiles(...) だと PostgREST がどちらか判定できずエラーになる。
+    // !doctor_id で辿る FK を明示する。
     .select(
-      'id, duty_date, note, doctor_id, shift_type_id, profiles(full_name), shift_types(name, color)'
+      'id, duty_date, note, doctor_id, shift_type_id, profiles!doctor_id(full_name, display_name), shift_types(name, color)'
     )
     .gte('duty_date', start)
     .lte('duty_date', end)
     .order('duty_date');
 
   if (error) throw error;
-  return data as Array<Assignment & { profiles: { full_name: string }; shift_types: { name: string; color: string } }>;
+  return data as Array<Assignment & { profiles: { full_name: string; display_name?: string | null }; shift_types: { name: string; color: string } }>;
 }
 
 // シフト種別を取得

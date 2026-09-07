@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuthStore } from '../store/authStore';
+import { getFreshGoogleToken } from '../lib/googleAuth';
 
 export function Settings() {
   const user = useAuthStore((state) => state.user);
@@ -13,6 +14,10 @@ export function Settings() {
   const [nightDutyNames, setNightDutyNames] = useState<string[]>([]);
   const [newNightDutyName, setNewNightDutyName] = useState('');
   
+  // 同期対象の Google カレンダーID
+  const [calendarIds, setCalendarIds] = useState<string[]>([]);
+  const [newCalendarId, setNewCalendarId] = useState('');
+
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -26,17 +31,19 @@ export function Settings() {
     if (!user) return;
     const { data } = await supabase
       .from('user_settings')
-      .select('external_duty_names, night_duty_names')
+      .select('external_duty_names, night_duty_names, calendar_ids')
       .eq('user_id', user.id)
       .maybeSingle();
 
     if (data) {
       setExternalNames(data.external_duty_names || []);
       setNightDutyNames(data.night_duty_names || []);
+      setCalendarIds(data.calendar_ids?.length ? data.calendar_ids : ['primary']);
     } else {
       // Default initial settings if not found in database
       setExternalNames(["新小倉", "赤池", "稲築", "タケスポ", "新庄", "芳野", "小波瀬"]);
       setNightDutyNames(["当直", "若松", "若松日当直"]);
+      setCalendarIds(['primary', 'family08074183291321109187@group.calendar.google.com']);
     }
   };
 
@@ -62,6 +69,18 @@ export function Settings() {
     setNightDutyNames(nightDutyNames.filter((name) => name !== nameToRemove));
   };
 
+  const handleAddCalendar = () => {
+    const id = newCalendarId.trim();
+    if (id && !calendarIds.includes(id)) {
+      setCalendarIds([...calendarIds, id]);
+      setNewCalendarId('');
+    }
+  };
+
+  const handleRemoveCalendar = (idToRemove: string) => {
+    setCalendarIds(calendarIds.filter((id) => id !== idToRemove));
+  };
+
   const saveSettings = async () => {
     if (!user) return;
     setIsSaving(true);
@@ -72,7 +91,8 @@ export function Settings() {
         .upsert({ 
           user_id: user.id, 
           external_duty_names: externalNames,
-          night_duty_names: nightDutyNames
+          night_duty_names: nightDutyNames,
+          calendar_ids: calendarIds
         });
 
       if (error) throw error;
@@ -91,13 +111,22 @@ export function Settings() {
         alert("セッションが見つかりません。");
         return;
       }
-      if (!session.provider_token) {
-        alert("Googleの連携トークンが見つかりません。一度ログアウトし、再度Googleログインした直後にこのボタンを押してみてください。");
-        return;
-      }
+
+      // 期限切れなら Edge Function 経由で自動的に再発行される
+      const providerToken = await getFreshGoogleToken();
+
       const m = await import('../services/googleCalendar');
-      await m.syncGoogleCalendar(session.provider_token);
-      alert("同期処理が完了しました！カレンダー画面をご確認ください。");
+      const result = await m.syncGoogleCalendar(providerToken);
+
+      const lines = [
+        `一致した予定: ${result.matched}件`,
+        `新しく登録: ${result.added}件`,
+        `登録済みのためスキップ: ${result.skipped}件`,
+      ];
+      if (result.calendarErrors.length > 0) {
+        lines.push('', '読み込めなかったカレンダー:', ...result.calendarErrors);
+      }
+      alert(lines.join('\n'));
     } catch (err: any) {
       alert("同期中にエラーが発生しました: " + err.message);
       console.error(err);
@@ -186,6 +215,53 @@ export function Settings() {
           ))}
           {nightDutyNames.length === 0 && (
             <li className="text-gray-500 text-sm text-center py-4">登録されている名前はありません</li>
+          )}
+        </ul>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4 text-teal-800">同期するカレンダー</h2>
+        <p className="text-gray-600 mb-4 text-sm">
+          ここに登録した Google カレンダーから予定を取得します。
+          <code className="bg-gray-100 px-1 py-0.5 rounded mx-1">primary</code>
+          はログイン中のアカウント本人のカレンダーです。
+          ファミリーなどの共有カレンダーは、Google カレンダーの
+          「設定と共有」→「カレンダーの統合」にあるカレンダーIDを追加してください。
+        </p>
+
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={newCalendarId}
+            onChange={(e) => setNewCalendarId(e.target.value)}
+            placeholder="例: family0123456789@group.calendar.google.com"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+            onKeyDown={(e) => e.key === 'Enter' && handleAddCalendar()}
+          />
+          <button
+            onClick={handleAddCalendar}
+            className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-medium"
+          >
+            追加
+          </button>
+        </div>
+
+        <ul className="space-y-2">
+          {calendarIds.map((id, index) => (
+            <li key={index} className="flex justify-between items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <span className="text-gray-800 break-all text-sm">
+                {id === 'primary' ? 'primary（自分のカレンダー）' : id}
+              </span>
+              <button
+                onClick={() => handleRemoveCalendar(id)}
+                className="text-red-600 hover:text-red-800 text-sm font-medium shrink-0"
+              >
+                削除
+              </button>
+            </li>
+          ))}
+          {calendarIds.length === 0 && (
+            <li className="text-gray-500 text-sm text-center py-4">同期対象のカレンダーがありません</li>
           )}
         </ul>
       </div>

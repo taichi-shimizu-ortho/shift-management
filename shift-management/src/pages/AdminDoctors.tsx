@@ -13,6 +13,7 @@ export function AdminDoctors() {
   const [isLoading, setIsLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingRole, setEditingRole] = useState<'doctor' | 'admin'>('doctor');
+  const [editingDisplayName, setEditingDisplayName] = useState('');
 
   useEffect(() => {
     if (!isAdmin) {
@@ -48,18 +49,23 @@ export function AdminDoctors() {
     }
   };
 
-  const handleUpdateRole = async (doctorId: string) => {
+  const handleUpdateDoctor = async (doctorId: string) => {
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ role: editingRole })
+        .update({
+          role: editingRole,
+          // 空欄なら null に戻して full_name にフォールバックさせる
+          display_name: editingDisplayName.trim() || null,
+        })
         .eq('id', doctorId);
 
       if (error) throw error;
       setEditingId(null);
       await loadDoctors();
-    } catch (error) {
-      console.error('Failed to update role:', error);
+    } catch (error: any) {
+      console.error('Failed to update doctor:', error);
+      alert('更新に失敗しました: ' + (error?.message ?? error));
     }
   };
 
@@ -77,6 +83,9 @@ export function AdminDoctors() {
                     医師名
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                    カレンダー表示名
+                  </th>
+                  <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
                     ロール
                   </th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
@@ -92,6 +101,21 @@ export function AdminDoctors() {
                   <tr key={doctor.id} className="border-b border-gray-200 hover:bg-gray-50">
                     <td className="px-6 py-4 font-medium text-gray-900">
                       {doctor.full_name}
+                    </td>
+                    <td className="px-6 py-4">
+                      {editingId === doctor.id ? (
+                        <input
+                          type="text"
+                          value={editingDisplayName}
+                          onChange={(e) => setEditingDisplayName(e.target.value)}
+                          placeholder={doctor.full_name}
+                          className="px-3 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 w-32"
+                        />
+                      ) : doctor.display_name ? (
+                        <span className="text-gray-900">{doctor.display_name}</span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">未設定</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       {editingId === doctor.id ? (
@@ -126,7 +150,7 @@ export function AdminDoctors() {
                       {editingId === doctor.id ? (
                         <>
                           <button
-                            onClick={() => handleUpdateRole(doctor.id)}
+                            onClick={() => handleUpdateDoctor(doctor.id)}
                             className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
                           >
                             <Save size={16} />
@@ -146,6 +170,7 @@ export function AdminDoctors() {
                             onClick={() => {
                               setEditingId(doctor.id);
                               setEditingRole(doctor.role);
+                              setEditingDisplayName(doctor.display_name ?? '');
                             }}
                             className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
                           >

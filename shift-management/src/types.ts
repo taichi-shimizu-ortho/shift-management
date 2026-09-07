@@ -1,6 +1,8 @@
 export type Profile = {
   id: string;
   full_name: string;
+  // カレンダー上の表示名。未設定なら full_name を使う。
+  display_name?: string | null;
   role: 'doctor' | 'admin';
   is_active: boolean;
   created_at: string;
