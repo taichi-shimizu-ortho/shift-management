@@ -33,3 +33,10 @@ export type MonthlyCounts = {
   month: string;
   cnt: number;
 };
+
+export type UserSettings = {
+  user_id: string;
+  external_duty_names: string[];
+  night_duty_names: string[];
+  updated_at: string;
+};

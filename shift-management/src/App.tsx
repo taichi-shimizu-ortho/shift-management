@@ -6,6 +6,7 @@ import { Login } from './pages/Login';
 import { Calendar } from './pages/Calendar';
 import { Summary } from './pages/Summary';
 import { AdminDoctors } from './pages/AdminDoctors';
+import { Settings } from './pages/Settings';
 
 export function App() {
   const initializeAuth = useAuthStore((state) => state.initializeAuth);
@@ -39,6 +40,14 @@ export function App() {
           element={
             <ProtectedRoute adminOnly>
               <AdminDoctors />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <Settings />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { Layout } from './Layout';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -25,5 +26,5 @@ export function ProtectedRoute({ children, adminOnly = false }: ProtectedRoutePr
     return <Navigate to="/calendar" replace />;
   }
 
-  return <>{children}</>;
+  return <Layout>{children}</Layout>;
 }

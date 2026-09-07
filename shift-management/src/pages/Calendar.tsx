@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import { useAuthStore } from '../store/authStore';
@@ -75,26 +76,7 @@ export function Calendar() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">医師シフト管理</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-gray-700">
-              {user?.full_name}
-              {isAdmin && <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">管理者</span>}
-            </span>
-            <button
-              onClick={logout}
-              className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-            >
-              <LogOut size={18} />
-              ログアウト
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <>
       <main className="max-w-6xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
@@ -211,6 +193,6 @@ export function Calendar() {
           )}
         </div>
       </main>
-    </div>
+    </>
   );
 }

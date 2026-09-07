@@ -33,11 +33,27 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
-        const { data: profile } = await supabase
+        let { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
+
+        // If profile doesn't exist (e.g. first time Google login), create it
+        if (!profile) {
+          const { data: newProfile } = await supabase
+            .from('profiles')
+            .insert({
+              id: session.user.id,
+              full_name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'Unknown',
+              role: 'doctor',
+              is_active: true,
+            })
+            .select()
+            .single();
+            
+          profile = newProfile;
+        }
 
         if (profile) {
           set({
@@ -45,6 +61,15 @@ export const useAuthStore = create<AuthState>((set) => ({
             isAdmin: profile.role === 'admin',
             isLoading: false,
           });
+
+          // Trigger calendar sync if provider token is present
+          if (session.provider_token) {
+            import('../services/googleCalendar').then((m) => {
+              m.syncGoogleCalendar(session.provider_token);
+            });
+          }
+        } else {
+          set({ isLoading: false });
         }
       } else {
         set({ isLoading: false });
