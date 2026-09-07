@@ -37,6 +37,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 集計
               </Link>
             )}
+            {isAdmin && (
+              <Link
+                to="/admin/doctors"
+                className="text-gray-600 hover:text-blue-600 transition font-medium"
+              >
+                医師管理
+              </Link>
+            )}
             <button
               onClick={logout}
               className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow-sm transition ml-2"

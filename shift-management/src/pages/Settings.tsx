@@ -126,6 +126,17 @@ export function Settings() {
       if (result.calendarErrors.length > 0) {
         lines.push('', '読み込めなかったカレンダー:', ...result.calendarErrors);
       }
+      if (result.unknownDoctors.length > 0) {
+        lines.push(
+          '',
+          `医師一覧に見つからなかったため登録しなかった名前 (${result.unknownDoctors.length}人):`,
+          ...result.unknownDoctors
+        );
+      }
+      if (result.unmatched.length > 0) {
+        // 予定名と設定のリストが合っていないときの手がかりになる
+        lines.push('', `一致しなかった予定名 (${result.unmatched.length}種):`, ...result.unmatched);
+      }
       alert(lines.join('\n'));
     } catch (err: any) {
       alert("同期中にエラーが発生しました: " + err.message);

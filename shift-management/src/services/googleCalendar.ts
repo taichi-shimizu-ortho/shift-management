@@ -1,10 +1,49 @@
 import { supabase } from '../lib/supabaseClient';
+import { cleanDisplayName } from '../lib/displayName';
+
+// 「(赤池)花田先生」形式。括弧の中が勤務先、後ろが交代した医師名。
+// 全角・半角どちらの括弧も許容する。
+const SWAP_PATTERN = /^[(（]\s*([^)）]+?)\s*[)）]\s*(.*)$/;
+
+type DoctorRow = { id: string; full_name: string; display_name?: string | null };
+
+// 「花田先生」「花田医師」のような敬称を落とす
+function normalizeDoctorName(name: string): string {
+  return cleanDisplayName(name)
+    .replace(/(先生|医師|Dr\.?)\s*$/i, '')
+    .trim();
+}
+
+// 予定名の医師名とプロフィールを照合する。
+// カレンダーには名字だけ、プロフィールはフルネームというズレがあるので、
+// どちらかがもう一方を含むなら同一人物とみなす。
+function findDoctor(rawName: string, doctors: DoctorRow[]): DoctorRow | null {
+  const needle = normalizeDoctorName(rawName);
+  if (!needle) return null;
+
+  for (const doctor of doctors) {
+    const candidates = [doctor.display_name, doctor.full_name]
+      .filter((v): v is string => Boolean(v))
+      .map(normalizeDoctorName)
+      .filter(Boolean);
+
+    if (candidates.some((c) => c === needle || c.includes(needle) || needle.includes(c))) {
+      return doctor;
+    }
+  }
+
+  return null;
+}
 
 export type SyncResult = {
   matched: number;
   added: number;
   skipped: number;
   calendarErrors: string[];
+  /** どのリストにも一致しなかった予定名（重複除く） */
+  unmatched: string[];
+  /** 括弧表記だったが、医師一覧に見つからなかった名前 */
+  unknownDoctors: string[];
 };
 
 export async function syncGoogleCalendar(providerToken: string): Promise<SyncResult> {
@@ -50,6 +89,11 @@ export async function syncGoogleCalendar(providerToken: string): Promise<SyncRes
     console.warn("No shift type named '当直' found. Using the first available shift type as fallback.");
     nightDutyShiftType = shiftTypes[0];
   }
+
+  // 2b. 交代した外勤を他の医師の予定として登録するため、医師一覧を引いておく
+  const { data: doctors } = await supabase
+    .from('profiles')
+    .select('id, full_name, display_name');
 
   // 3. Fetch Google Calendar events (for current month and next month)
   const now = new Date();
@@ -107,42 +151,99 @@ export async function syncGoogleCalendar(providerToken: string): Promise<SyncRes
     } while (pageToken);
   }
 
+  // 取得できた予定を全件出す。「アプリに出ない予定が、そもそも取得できていないのか、
+  // 取得できているのに名前が一致していないのか」を切り分けるための手がかり。
+  console.log(
+    `Fetched ${events.length} events from ${calendarIds.length} calendar(s):`,
+    events.map((e: any) => ({
+      date: e.start?.date || e.start?.dateTime,
+      summary: e.summary,
+      recurring: Boolean(e.recurringEventId),
+    }))
+  );
+
   // 4. Process matching events
-  // We categorize them into external duty and night duty
-  const eventsToSync: { event: any, shiftTypeId: number }[] = [];
+  const eventsToSync: { event: any; shiftTypeId: number; doctorId: string; note: string }[] = [];
+
+  const unmatched = new Set<string>();
+  const unknownDoctors = new Set<string>();
+
+  // 完全一致だけだと、予定名に余分な文字（「稲築病院 午前」など）が付いているだけで拾えない。
+  // まず完全一致を見て、無ければ部分一致（予定名に登録名が含まれるか）で拾う。
+  const matchName = (summary: string, names: string[]) =>
+    names.includes(summary) || names.some((name) => name && summary.includes(name));
 
   events.forEach((event: any) => {
-    const summary = event.summary;
+    const summary = event.summary?.trim();
     if (!summary) return;
 
-    if (externalDutyNames.includes(summary)) {
-      eventsToSync.push({ event, shiftTypeId: externalDutyShiftType.id });
-    } else if (nightDutyNames.includes(summary)) {
-      eventsToSync.push({ event, shiftTypeId: nightDutyShiftType.id });
+    // 「(赤池)花田先生」のように括弧で始まる予定は、交代して他の医師が担当する勤務。
+    // 括弧の中が勤務先、後ろがその医師名になる。
+    const swap = summary.match(SWAP_PATTERN);
+    const dutyLabel = swap ? swap[1] : summary;
+    const otherDoctorName = swap ? swap[2] : '';
+
+    let shiftTypeId: number;
+    if (matchName(dutyLabel, externalDutyNames)) {
+      shiftTypeId = externalDutyShiftType.id;
+    } else if (matchName(dutyLabel, nightDutyNames)) {
+      shiftTypeId = nightDutyShiftType.id;
+    } else {
+      // 実際の予定名を見せて、設定の取りこぼしを判断できるようにする
+      unmatched.add(summary);
+      return;
     }
+
+    // 括弧表記でなければ自分の勤務
+    if (!swap || !otherDoctorName) {
+      eventsToSync.push({ event, shiftTypeId, doctorId: user.id, note: summary });
+      return;
+    }
+
+    const other = findDoctor(otherDoctorName, doctors ?? []);
+    if (!other) {
+      // 見つからない医師を自分の予定として登録すると間違ったシフトになるので、
+      // 登録せずに報告だけして医師の追加を促す。
+      unknownDoctors.add(otherDoctorName);
+      return;
+    }
+
+    // バッジは「花田（赤池）」と出したいので、note には勤務先だけを入れる
+    eventsToSync.push({ event, shiftTypeId, doctorId: other.id, note: dutyLabel });
   });
 
   if (eventsToSync.length === 0) {
-    return { matched: 0, added: 0, skipped: 0, calendarErrors };
+    return {
+      matched: 0,
+      added: 0,
+      skipped: 0,
+      calendarErrors,
+      unmatched: [...unmatched],
+      unknownDoctors: [...unknownDoctors],
+    };
   }
 
   // 5. Fetch existing assignments to avoid duplicates
+  // 他の医師分も登録するようになったので、自分の分だけでなく全員分を見る。
+  // （assignments の unique 制約は doctor_id + shift_type_id + duty_date）
   const { data: existingAssignments } = await supabase
     .from('assignments')
-    .select('id, duty_date, shift_type_id, note')
-    .eq('doctor_id', user.id)
+    .select('id, duty_date, shift_type_id, doctor_id')
     .gte('duty_date', timeMin.split('T')[0])
     .lte('duty_date', timeMax.split('T')[0]);
 
   let added = 0;
   let skipped = 0;
 
-  for (const { event, shiftTypeId } of eventsToSync) {
+  for (const { event, shiftTypeId, doctorId, note } of eventsToSync) {
     // Google Calendar all-day event uses start.date, timed event uses start.dateTime
     const eventDateStr = event.start.date || event.start.dateTime.split('T')[0];
 
     const exists = existingAssignments?.some(
-      a => a.duty_date === eventDateStr && a.shift_type_id === shiftTypeId
+      a =>
+        a.duty_date === eventDateStr &&
+        a.shift_type_id === shiftTypeId &&
+        a.doctor_id === doctorId
     );
 
     if (exists) {
@@ -151,10 +252,10 @@ export async function syncGoogleCalendar(providerToken: string): Promise<SyncRes
     }
 
     const { error } = await supabase.from('assignments').insert({
-      doctor_id: user.id,
+      doctor_id: doctorId,
       shift_type_id: shiftTypeId,
       duty_date: eventDateStr,
-      note: event.summary, // 詳細欄にこの値を入れる
+      note, // 詳細欄にこの値を入れる
     });
 
     // 書き込みの失敗を黙って捨てると「同期成功なのに予定が出ない」状態になるので、
@@ -169,5 +270,12 @@ export async function syncGoogleCalendar(providerToken: string): Promise<SyncRes
   }
 
   console.log(`Calendar sync complete. Added ${added}, skipped ${skipped}.`);
-  return { matched: eventsToSync.length, added, skipped, calendarErrors };
+  return {
+    matched: eventsToSync.length,
+    added,
+    skipped,
+    calendarErrors,
+    unmatched: [...unmatched],
+    unknownDoctors: [...unknownDoctors],
+  };
 }
